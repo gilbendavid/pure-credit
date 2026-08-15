@@ -1,0 +1,10 @@
+{
+  "name": "pure-credit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pure Credit landing page + car loan calculator. Static site, no build step, no dependencies.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/loan.test.js"
+  }
+}
