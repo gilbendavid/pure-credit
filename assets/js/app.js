@@ -31,11 +31,39 @@ const shekelPrecise = new Intl.NumberFormat('he-IL', {
   maximumFractionDigits: 2,
 });
 
+/** Strips thousands-separator commas so "50,000" reads as "50000". */
+function stripCommas(value) {
+  return value.replace(/,/g, '');
+}
+
 /** Reads a numeric input, returning NaN for blanks so validation can catch it. */
 function readNumber(id) {
-  const raw = document.getElementById(id).value.trim();
+  const raw = stripCommas(document.getElementById(id).value.trim());
   if (raw === '') return NaN;
   return Number(raw);
+}
+
+/** Formats a digits-only string with thousands separators: "50000" -> "50,000". */
+function formatThousands(digits) {
+  return digits === '' ? '' : Number(digits).toLocaleString('en-US');
+}
+
+/** Live-formats a text input with thousands separators as the user types. */
+function wireThousandsFormatting(input) {
+  input.addEventListener('input', () => {
+    const cursorPos = input.selectionStart;
+    const digitsBeforeCursor = input.value.slice(0, cursorPos).replace(/\D/g, '').length;
+    input.value = formatThousands(input.value.replace(/\D/g, ''));
+
+    // Restore the cursor after the same digit it followed before formatting.
+    let seen = 0;
+    let pos = 0;
+    while (pos < input.value.length && seen < digitsBeforeCursor) {
+      if (/\d/.test(input.value[pos])) seen++;
+      pos++;
+    }
+    input.setSelectionRange(pos, pos);
+  });
 }
 
 /* ------------------------------------------------------------------ *
@@ -103,16 +131,17 @@ function wireSliders() {
     const target = document.getElementById(slider.dataset.sliderFor);
 
     slider.addEventListener('input', () => {
-      target.value = slider.value;
+      target.value = formatThousands(slider.value);
       renderResults();
     });
 
     target.addEventListener('input', () => {
       // Mirror typed values onto the slider, clamped to its range.
-      const n = Number(target.value);
+      const n = Number(stripCommas(target.value));
       if (Number.isFinite(n)) {
         slider.value = Math.min(Math.max(n, Number(slider.min)), Number(slider.max));
       }
+      renderResults();
     });
   }
 }
@@ -240,5 +269,7 @@ async function handleSubmit(event) {
  * ------------------------------------------------------------------ */
 
 wireSliders();
+wireThousandsFormatting(document.getElementById('amount'));
+wireThousandsFormatting(document.getElementById('balloonAmount'));
 renderResults();
 applyForm.addEventListener('submit', handleSubmit);
