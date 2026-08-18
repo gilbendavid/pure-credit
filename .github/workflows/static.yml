@@ -31,6 +31,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Inject webhook URL
+        # Writes the real webhook address into config.js at deploy time, so it
+        # never lives in the (public) repo. Set the secret under
+        # Settings > Secrets and variables > Actions > LOAN_APPLICATION_WEBHOOK_URL.
+        # If the secret is unset the file keeps its empty default and the form
+        # shows a friendly "unavailable" message instead of failing silently.
+        run: |
+          printf 'export const WEBHOOK_URL = %s;\n' \
+            "$(printf '%s' "$WEBHOOK_URL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" \
+            > assets/js/config.js
+        env:
+          WEBHOOK_URL: ${{ secrets.LOAN_APPLICATION_WEBHOOK_URL }}
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
