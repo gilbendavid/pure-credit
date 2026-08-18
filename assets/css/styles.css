@@ -293,6 +293,7 @@ h3 {
   padding-block: clamp(48px, 8vh, 88px);
 }
 .card {
+  margin-top: 10px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -573,6 +574,12 @@ h3 {
 }
 
 /* honeypot: visually hidden but still in the DOM for bots to find */
+/* secondary link under the submit button */
+.apply-docs-link {
+  margin-top: 12px;
+  font-size: 15px;
+}
+
 .hp {
   position: absolute;
   width: 1px;
@@ -641,6 +648,61 @@ h3 {
   font-size: 12.5px;
   opacity: 0.8;
   margin: 0;
+}
+
+/* ----------------------- Documents page --------------------------- */
+
+.docs-groups {
+  display: grid;
+  gap: 20px;
+}
+.docs-group-title {
+  font-size: clamp(20px, 3vw, 24px);
+  font-weight: 700;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.docs-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.docs-list li {
+  position: relative;
+  padding-inline-start: 22px;
+  padding-block: 7px;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+/* gold bullet, mirrored automatically by the logical property */
+.docs-list li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 4px;
+  top: 16px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold-deep));
+}
+.docs-note {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border-radius: var(--radius-sm);
+  background: rgba(220, 189, 112, 0.12);
+  border: 1px solid rgba(220, 189, 112, 0.45);
+}
+.docs-note-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--navy-deep);
+}
+.docs-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  margin-top: 32px;
 }
 
 /* --------------------------- Responsive --------------------------- */
