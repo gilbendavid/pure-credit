@@ -732,6 +732,11 @@ h3 {
     font-size: 13.5px;
     white-space: nowrap;
   }
+  /* portrait crop of the hero art — the landscape one lost its subject on narrow screens */
+  .hero {
+    background-image: url("../img/hero-bg-mobile.jpg");
+    background-position: center center;
+  }
   .hero-actions .btn {
     width: 100%;
   }
