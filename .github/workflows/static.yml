@@ -37,6 +37,10 @@ jobs:
         # live form silently answers "unavailable" for every visitor. Fail here
         # instead, before anything is published.
         run: |
+          # Pasting into the secret textarea easily picks up a trailing newline,
+          # which would survive the glob below and end up escaped as \n inside
+          # the emitted JS string. Validate the trimmed value.
+          WEBHOOK_URL="$(printf '%s' "$WEBHOOK_URL" | tr -d '[:space:]')"
           if [ -z "$WEBHOOK_URL" ]; then
             echo "::error::LOAN_APPLICATION_WEBHOOK_URL is unset or empty. Set it under Settings > Secrets and variables > Actions, then re-run. Refusing to deploy a form that cannot submit."
             exit 1
@@ -58,11 +62,11 @@ jobs:
         # Writes the real webhook address into config.js at deploy time, so it
         # never lives in the (public) repo. Set the secret under
         # Settings > Secrets and variables > Actions > LOAN_APPLICATION_WEBHOOK_URL.
-        # If the secret is unset the file keeps its empty default and the form
-        # shows a friendly "unavailable" message instead of failing silently.
+        # The "Check webhook secret" step above guarantees a sane value by here.
+        # .strip() drops any stray whitespace so it cannot land inside the URL.
         run: |
           printf 'export const WEBHOOK_URL = %s;\n' \
-            "$(printf '%s' "$WEBHOOK_URL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')" \
+            "$(printf '%s' "$WEBHOOK_URL" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read().strip()))')" \
             > assets/js/config.js
         env:
           WEBHOOK_URL: ${{ secrets.LOAN_APPLICATION_WEBHOOK_URL }}
