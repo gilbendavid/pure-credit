@@ -524,6 +524,12 @@ h3 {
   flex-direction: column;
   gap: 22px;
 }
+/* Any class that sets `display` outranks the browser's own [hidden] rule, so
+   .apply-form stayed on screen underneath the success message. Put `hidden`
+   back in charge for every element on the page. */
+[hidden] {
+  display: none !important;
+}
 .form-group {
   border: none;
   margin: 0;
@@ -604,6 +610,13 @@ h3 {
   color: var(--text-muted);
   max-width: 380px;
   margin: 0 auto 22px;
+}
+.apply-success .apply-status {
+  margin-bottom: 22px;
+  font-size: 15px;
+}
+.apply-success .apply-status strong {
+  color: var(--text);
 }
 .success-check {
   width: 60px;

@@ -430,7 +430,7 @@
               >
             </form>
 
-            <!-- Success screen, shown after a 2xx response -->
+            <!-- Success screen, shown once the webhook confirms success:true -->
             <div class="apply-success" id="applySuccess" hidden>
               <div class="success-check" aria-hidden="true">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -447,7 +447,14 @@
               <p>
                 קיבלנו את פרטי בקשת ההלוואה שלך ונציג מטעמנו יחזור אליך בהקדם.
               </p>
-              <a class="btn btn-ghost" href="#top">חזרה לעמוד הראשי</a>
+              <!-- Filled from the webhook's "status" field; stays hidden if it
+                   does not send one. -->
+              <p class="apply-status" id="applyStatus" hidden>
+                סטטוס הבקשה: <strong id="applyStatusValue"></strong>
+              </p>
+              <button class="btn btn-ghost" type="button" id="newRequestBtn">
+                הגש בקשה חדשה
+              </button>
             </div>
           </div>
         </div>

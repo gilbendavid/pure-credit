@@ -15,6 +15,29 @@ import {
 import { WEBHOOK_URL } from './config.js';
 
 /* ------------------------------------------------------------------ *
+ * Webhook address
+ * ------------------------------------------------------------------ */
+
+/**
+ * The address this page posts to.
+ *
+ * config.js always holds the production n8n url. Loading the page with
+ * ?webhook=test rewrites /webhook/ to /webhook-test/ on the same host, which is
+ * how you point a real submission at the n8n editor while building the
+ * workflow. Only the path is swapped - the host always comes from config.js, so
+ * a query string can never redirect applicant data somewhere else.
+ */
+function resolveWebhookUrl() {
+  if (!WEBHOOK_URL) return '';
+  const wantsTest =
+    new URLSearchParams(window.location.search).get('webhook') === 'test';
+  if (!wantsTest) return WEBHOOK_URL;
+  return WEBHOOK_URL.replace('/webhook/', '/webhook-test/');
+}
+
+const webhookUrl = resolveWebhookUrl();
+
+/* ------------------------------------------------------------------ *
  * Formatting helpers
  * ------------------------------------------------------------------ */
 
@@ -174,6 +197,16 @@ const applyForm = document.getElementById('applyForm');
 const submitBtn = document.getElementById('submitBtn');
 const applyError = document.getElementById('applyError');
 const applySuccess = document.getElementById('applySuccess');
+const applyStatus = document.getElementById('applyStatus');
+const applyStatusValue = document.getElementById('applyStatusValue');
+const newRequestBtn = document.getElementById('newRequestBtn');
+
+/** Every field validation can mark, in the order they appear on the page. */
+const allFieldIds = [
+  ...calcFields,
+  'agentFullName', 'agentAgencyName', 'agentPhone',
+  'applicantFirstName', 'applicantLastName', 'applicantPhone',
+];
 
 // Guards against a double submit even if the button state lags (e.g. double Enter).
 let isSubmitting = false;
@@ -204,6 +237,81 @@ function showFormError(message) {
   applyError.classList.add('show');
 }
 
+/**
+ * Reads the webhook's reply.
+ *
+ * The workflow answers a successful submission with
+ *   { "success": true, "message": "...", "status": "חדשה" }
+ * so `success` is what decides, not the status code alone - n8n can return 200
+ * from a branch that did not actually record the application.
+ *
+ * Anything that is not JSON, or JSON without a `success` field, is treated as
+ * success on a 2xx. That is the shape n8n sends when the Webhook node responds
+ * immediately ({"message":"Workflow was started"}) and when it is set to "no
+ * response body", so the form keeps working if the workflow is rewired.
+ */
+async function readWebhookResult(response) {
+  let body = null;
+  try {
+    const text = await response.text();
+    if (text.trim() !== '') body = JSON.parse(text);
+  } catch {
+    body = null; // Not JSON - fall through to the status-code check.
+  }
+
+  const hasVerdict =
+    body !== null && typeof body === 'object' && 'success' in body;
+
+  return {
+    // Both have to agree. A non-2xx is always a failure however the body reads,
+    // and a 2xx still counts as one if the workflow reported success:false.
+    ok: response.ok && (hasVerdict ? body.success === true : true),
+    // The webhook's own message is English and meant for logs, not applicants.
+    message: typeof body?.message === 'string' ? body.message : '',
+    status: typeof body?.status === 'string' ? body.status.trim() : '',
+  };
+}
+
+/** Shows the confirmation screen, with the webhook's status when it sent one. */
+function showSuccess(status) {
+  if (status) {
+    applyStatusValue.textContent = status;
+    applyStatus.hidden = false;
+  } else {
+    applyStatus.hidden = true;
+  }
+  // Put the button back to "send" while it is out of sight, so the form is
+  // ready to use the moment "הגש בקשה חדשה" brings it back.
+  setSubmitting(false);
+  applyForm.hidden = true;
+  applySuccess.hidden = false;
+  applySuccess.scrollIntoView({ block: 'center' });
+}
+
+/**
+ * Clears the confirmation screen and hands back an empty form.
+ *
+ * Only the agent and applicant details are wiped - form.reset() reaches exactly
+ * the fields inside <form id="applyForm">. The loan amount, term, rate and
+ * balloon live in the calculator section above and are deliberately left as the
+ * user set them, which is usually what a second application for the same deal
+ * needs. renderResults() repaints the mirrored monthly payment either way.
+ */
+function startNewRequest() {
+  applyForm.reset();
+  for (const id of allFieldIds) clearFieldError(id);
+  applyError.textContent = '';
+  applyError.classList.remove('show');
+  applyStatus.hidden = true;
+
+  applySuccess.hidden = true;
+  applyForm.hidden = false;
+  renderResults();
+
+  applyForm.scrollIntoView({ block: 'start' });
+  document.getElementById('agentFullName').focus();
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
   if (isSubmitting) return;
@@ -217,11 +325,6 @@ async function handleSubmit(event) {
 
   // Validate everything and paint the errors.
   const errors = validateApplication(values);
-  const allFieldIds = [
-    ...calcFields,
-    'agentFullName', 'agentAgencyName', 'agentPhone',
-    'applicantFirstName', 'applicantLastName', 'applicantPhone',
-  ];
   for (const id of allFieldIds) {
     if (errors[id]) showFieldError(id, errors[id]);
     else clearFieldError(id);
@@ -233,7 +336,7 @@ async function handleSubmit(event) {
     return;
   }
 
-  if (!WEBHOOK_URL) {
+  if (!webhookUrl) {
     // Nothing to send to yet. Fail visibly but keep the form intact.
     console.warn('WEBHOOK_URL is not set - the application was not sent.');
     showFormError('שליחת הבקשה אינה זמינה כרגע. נסו שוב מאוחר יותר.');
@@ -244,21 +347,43 @@ async function handleSubmit(event) {
 
   setSubmitting(true);
   try {
-    const response = await fetch(WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const result = await readWebhookResult(response);
 
-    // Success: swap the form for the confirmation screen.
-    applyForm.hidden = true;
-    applySuccess.hidden = false;
-    applySuccess.scrollIntoView({ block: 'center' });
+    if (!result.ok) {
+      // A 200 carrying success:false is a rejection, not a transport failure -
+      // say so in the log so it is not mistaken for a network problem.
+      throw new Error(
+        response.ok
+          ? 'webhook returned success:false' +
+            (result.message ? ' - ' + result.message : '')
+          : 'HTTP ' + response.status,
+      );
+    }
+
+    showSuccess(result.status);
   } catch (err) {
     // Keep every value the user typed; just let them try again.
-    console.error('Submission failed:', err);
+    //
+    // A TypeError here means fetch never got a readable response: almost always
+    // the CORS preflight. The browser reports it as a generic network failure
+    // and only prints the blocked-by-CORS line in the console, so spell out the
+    // fix rather than leaving a bare "Failed to fetch".
+    if (err instanceof TypeError) {
+      console.error(
+        'Submission blocked before it reached n8n (CORS or network). Open the ' +
+          'Webhook node in n8n > Options > "Allowed Origins (CORS)" and set it ' +
+          'to ' + window.location.origin + ' (or *). Target was: ' + webhookUrl,
+        err,
+      );
+    } else {
+      console.error('Submission failed:', err);
+    }
     showFormError('לא הצלחנו לשלוח את הבקשה. אנא נסו שוב.');
     setSubmitting(false);
   }
@@ -273,3 +398,4 @@ wireThousandsFormatting(document.getElementById('amount'));
 wireThousandsFormatting(document.getElementById('balloonAmount'));
 renderResults();
 applyForm.addEventListener('submit', handleSubmit);
+newRequestBtn.addEventListener('click', startNewRequest);
