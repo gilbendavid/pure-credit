@@ -31,6 +31,29 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check webhook secret
+        # The injection step below cannot tell an unset secret from a valid one -
+        # it happily writes an empty string, the deploy reports success, and the
+        # live form silently answers "unavailable" for every visitor. Fail here
+        # instead, before anything is published.
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "::error::LOAN_APPLICATION_WEBHOOK_URL is unset or empty. Set it under Settings > Secrets and variables > Actions, then re-run. Refusing to deploy a form that cannot submit."
+            exit 1
+          fi
+          case "$WEBHOOK_URL" in
+            https://*/webhook/*) ;;
+            https://*/webhook-test/*)
+              echo "::error::LOAN_APPLICATION_WEBHOOK_URL points at an n8n test path (/webhook-test/), which only answers one call after you press Execute workflow. Use the production /webhook/ URL."
+              exit 1
+              ;;
+            *)
+              echo "::error::LOAN_APPLICATION_WEBHOOK_URL does not look like an n8n production webhook (expected https://.../webhook/...)."
+              exit 1
+              ;;
+          esac
+        env:
+          WEBHOOK_URL: ${{ secrets.LOAN_APPLICATION_WEBHOOK_URL }}
       - name: Inject webhook URL
         # Writes the real webhook address into config.js at deploy time, so it
         # never lives in the (public) repo. Set the secret under
