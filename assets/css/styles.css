@@ -172,6 +172,12 @@ h3 {
   outline-offset: 3px;
 }
 
+/* Keep keyboard focus visible on links, form controls, and native widgets. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--gold-deep);
+  outline-offset: 3px;
+}
+
 /* ---------------------------- Header ------------------------------ */
 
 .site-header {
