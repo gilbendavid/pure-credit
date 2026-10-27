@@ -10,8 +10,8 @@ step and no dependencies.** It is deployed as-is to GitHub Pages.
 
 ```
 index.html              the whole page
-terms.html              תנאי שימוש (skeleton)
-privacy.html            מדיניות פרטיות (skeleton)
+accessibility.html      הצהרת נגישות
+privacy.html            מדיניות פרטיות
 assets/css/styles.css   all styling (RTL, mobile-first)
 assets/js/loan.js       pure logic: calculation, validation, payload
 assets/js/app.js        DOM wiring: live results + form submission
