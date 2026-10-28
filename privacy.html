@@ -1,36 +1,104 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pure Credit | מדיניות פרטיות</title>
+<title>מדיניות פרטיות | Pure Credit</title>
+<meta name="description" content="מדיניות הפרטיות של פיור קרדיט בע״מ באתר purecredit.co.il.">
 <link rel="icon" type="image/png" href="assets/img/favicon.png">
-<link rel="stylesheet" href="assets/css/styles.css?v=2">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<meta name="theme-color" content="#1b2b52">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700;900&family=Assistant:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/styles.css?v=4">
 </head>
 <body>
+<a class="skip-link" href="#main">דלגו לתוכן הראשי</a>
 <header class="site-header">
   <div class="container header-inner">
-    <a class="header-logo" href="index.html" aria-label="Pure Credit — לדף הבית">
+    <a class="header-logo" href="index.html#top" aria-label="Pure Credit — לדף הבית">
       <img src="assets/img/logo.png" width="600" height="160" alt="Pure Credit — פתרונות מימון">
     </a>
     <a class="btn btn-ghost btn-sm header-cta" href="index.html">חזרה לעמוד הראשי</a>
   </div>
 </header>
-<main class="section">
-  <div class="container" style="max-width:720px;">
+<main id="main" class="section">
+  <div class="container" style="max-width:820px;">
     <h1 class="section-title">מדיניות פרטיות</h1>
-    <p class="section-sub">כיצד אנו אוספים, שומרים ומשתמשים במידע שלכם.</p>
-    <div class="card">
-      <p style="color:var(--text-muted);">
-        תוכן הדף יעודכן בהמשך. לשאלות ניתן לפנות אלינו דרך טופס יצירת הקשר בעמוד הראשי.
-      </p>
-    </div>
+    <p class="section-sub">פיור קרדיט בע״מ — purecredit.co.il</p>
+
+    <article class="card legal-content">
+      <p class="legal-updated">תאריך עדכון אחרון: 27 באוקטובר 2026</p>
+      <p>אתר purecredit.co.il מופעל על ידי פיור קרדיט בע״מ (להלן: "החברה"). מדיניות זו מתארת את המידע שהאתר מבקש, את אופן שליחתו ואת המגבלות שניתן לאמת מתוך קוד האתר הנוכחי.</p>
+
+      <section>
+        <h2>1. איזה מידע נאסף באתר</h2>
+        <p>בעת שימוש במחשבון, החישובים מתבצעים בדפדפן. אין צורך למסור פרטי קשר כדי לחשב החזר. טופס הבקשה באתר מבקש:</p>
+        <ul>
+          <li>פרטי סוכן: שם מלא, שם סוכנות ומספר טלפון.</li>
+          <li>פרטי מבקש: שם פרטי, שם משפחה ומספר טלפון.</li>
+          <li>פרטי החישוב: סכום הלוואה, תקופה, סכום בלון וריבית.</li>
+        </ul>
+        <p>בעת שליחת הטופס נשלחים גם נתוני חישוב כגון ההחזר החודשי, עמלה, מע״מ וסך העמלה כולל מע״מ. הטופס אינו מבקש מספר זהות או פרטי חשבון בנק.</p>
+      </section>
+
+      <section>
+        <h2>2. שליחת בקשה וגורמים המקבלים מידע</h2>
+        <p>הטופס שולח את הפרטים רק לאחר שהמשתמש לוחץ על כפתור השליחה והבדיקה המקומית של השדות עוברת. בקוד הנוכחי מוגדר יעד webhook ב־n8n Cloud, שאליו נשלח גוף הבקשה בפורמט JSON. אם היעד אינו מוגדר או שהשליחה נכשלת, האתר מציג הודעה מתאימה.</p>
+      </section>
+
+      <section>
+        <h2>3. מטרות השימוש</h2>
+        <p>לפי מבנה הטופס, מטרת איסוף הפרטים היא קבלת בקשת מימון ויצירת קשר עם הסוכן או מבקש ההלוואה בנוגע לבקשה ולנתוני החישוב. בקוד האתר לא נמצא מנגנון הרשמה לדיוור שיווקי או תיבת סימון להסכמה לדיוור.</p>
+      </section>
+
+      <section>
+        <h2>4. מידע טכני ושירותים חיצוניים</h2>
+        <p>הדפדפן טוען את OpenNagish מ־jsDelivr ואת הגופנים של האתר מ־Google Fonts. פניות אלה עשויות להעביר לספקים מידע טכני הנחוץ לבקשות רשת, כגון כתובת IP ופרטי דפדפן. לא נבדקו יומני הגישה, תנאי העיבוד או מיקום עיבוד המידע אצל הספקים.</p>
+        <p>שרת האתר ושירות ה־webhook עשויים לעבד מידע טכני הנלווה לבקשות. פרטי האחסון, הגישה והמחיקה בצד השירותים אינם גלויים בקוד האתר.</p>
+      </section>
+
+      <section>
+        <h2>5. Cookies ואחסון בדפדפן</h2>
+        <p>בבדיקת קוד האתר לא נמצא שימוש יזום ב־Cookies, כלי אנליטיקה או פיקסלים פרסומיים. ספריית OpenNagish שומרת העדפות תצוגה באחסון המקומי של הדפדפן (localStorage); זהו אחסון דפדפן ולא Cookie. לא ניתן לשלול מנגנוני אחסון או Cookies של ספקי אירוח ושירותים חיצוניים שלא נבדקו.</p>
+      </section>
+
+      <section>
+        <h2>6. שמירת מידע ואבטחתו</h2>
+        <p>קוד האתר אינו שומר את פרטי הטופס ב־localStorage או ב־sessionStorage, אך שולח אותם ליעד ה־webhook בעת הגשה. משך השמירה, אמצעי האבטחה, הרשאות הגישה וגיבויים ביעד זה אינם ניתנים לאימות מתוך קוד האתר, ולכן אינם מפורטים כאן כעובדות.</p>
+      </section>
+
+      <section>
+        <h2>7. בחירה במסירת פרטים</h2>
+        <p>הגלישה באתר והשימוש במחשבון אינם דורשים מסירת פרטים. מסירת פרטים בטופס היא בחירה של המשתמש; ללא הפרטים הנדרשים לא ניתן לשלוח בקשת מימון דרך הטופס.</p>
+      </section>
+
+      <section>
+        <h2>8. פניות בנוגע למידע אישי</h2>
+        <p>ניתן לפנות לחברה בבקשות או בשאלות בנוגע למידע אישי, והחברה תבחן אותן בהתאם לדין החל. נכון למועד עדכון המדיניות, באתר לא פורסמו פרטי קשר מאומתים לפניות פרטיות. יש להשלים ולפרסם כתובת דוא״ל או ערוץ פנייה מאומת לפני פרסום המדיניות כסופית.</p>
+      </section>
+
+      <section>
+        <h2>9. עדכונים למדיניות</h2>
+        <p>המדיניות עשויה להתעדכן בעקבות שינוי באתר, בתהליכי עיבוד המידע או בדרישות הדין. תאריך העדכון האחרון יופיע בראש העמוד.</p>
+      </section>
+    </article>
   </div>
 </main>
 <footer class="site-footer">
   <div class="container">
+    <nav class="footer-links" aria-label="קישורים משפטיים">
+      <a href="accessibility.html">הצהרת נגישות</a>
+      <span aria-hidden="true">·</span>
+      <a href="privacy.html" aria-current="page">מדיניות פרטיות</a>
+      <span aria-hidden="true">·</span>
+      <a href="index.html">לדף הראשי</a>
+    </nav>
     <p class="footer-copy">© 2026 Pure Credit — כל הזכויות שמורות</p>
   </div>
 </footer>
+<script src="assets/js/accessibility.js?v=1" defer></script>
 </body>
 </html>
