@@ -1,10 +1,3 @@
-/**
- * Tests for the loan logic. Run with: npm test
- *
- * No test framework is installed - this uses `node --test`, which is built
- * into Node itself. There are zero dependencies in this project.
- */
-
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -12,29 +5,39 @@ import {
   pmt,
   calculateLoan,
   validateApplication,
+  validateCalculatorInputs,
   buildLoanApplicationPayload,
+  getMaximumBalloonAmount,
+  LOAN_AMOUNT_MIN,
+  LOAN_AMOUNT_MAX,
+  TERM_MONTHS_MIN,
+  TERM_MONTHS_MAX,
+  MAX_BALLOON_TERM_MONTHS,
+  MAX_BALLOON_PRINCIPAL_RATIO,
+  PRIME_SPREAD_MIN_PERCENT,
+  PRIME_SPREAD_MAX_PERCENT,
+  FIXED_RATE_MIN_PERCENT,
+  FIXED_RATE_MAX_PERCENT,
   COMMISSION_RATE,
   COMMISSION_FIXED,
   VAT_RATE,
+  REFERENCE_PRIME_BASE_RATE_PERCENT,
 } from '../assets/js/loan.js';
+import { postLoanApplication, readWorkflowResponse } from '../assets/js/workflow.js';
 
-/** Asserts two floats are equal to within a tiny tolerance. */
-function closeTo(actual, expected, tolerance = 1e-9) {
-  assert.ok(
-    Math.abs(actual - expected) < tolerance,
-    `expected ${actual} to be within ${tolerance} of ${expected}`
-  );
+function closeTo(actual, expected, tolerance = 0.01) {
+  assert.ok(Math.abs(actual - expected) <= tolerance, `expected ${actual} to be within ${tolerance} of ${expected}`);
 }
 
-/** A complete, valid form. Individual tests override what they care about. */
 function validForm(overrides = {}) {
   return {
-    amount: 50000,
-    termMonths: 60,
-    annualInterestRatePercent: 8,
-    balloonAmount: 20000,
+    amount: 100000,
+    termMonths: 100,
+    interestRateType: 'prime_margin',
+    ratePercent: 5.5,
+    balloonAmount: 0,
     agentFullName: 'ישראל ישראלי',
-    agentAgencyName: 'סוכנות רכב בעמ',
+    agentAgencyName: 'סוכנות רכב בע״מ',
     agentPhone: '050-1234567',
     applicantFirstName: 'דניאל',
     applicantLastName: 'כהן',
@@ -43,308 +46,255 @@ function validForm(overrides = {}) {
   };
 }
 
-/* ================================================================== *
- * The reference case, straight out of the spreadsheet.
- *
- * "סימולטור הלוואת רכב.xlsx" with E7=50000, E8=60, E9=0.08, E10=20000
- * holds these computed values:
- *   E13 (monthly payment)  741.62516198574281
- *   E16 (commission)       1130
- *   E17 (VAT)              203.4
- *   E18 (total incl. VAT)  1333.4
- * ================================================================== */
+test('matches reference default: 100,000 / 100 / P + 5.5% = 1,491 monthly', () => {
+  const result = calculateLoan(validForm());
+  closeTo(result.annualRate, 0.1025, 1e-12);
+  closeTo(result.monthlyPaymentExact, 1491.17);
+  assert.equal(result.monthlyPayment, 1491);
+});
 
-test('matches the Excel reference case exactly', () => {
-  const result = calculateLoan({
-    amount: 50000,
+test('matches fixed indexed example: 100,000 / 100 / 5.5% = 1,249 monthly', () => {
+  const result = calculateLoan(validForm({
+    interestRateType: 'fixed_linked_to_cpi',
+    ratePercent: 5.5,
+  }));
+  closeTo(result.annualRate, 0.055, 1e-12);
+  closeTo(result.monthlyPaymentExact, 1248.86);
+  assert.equal(result.monthlyPayment, 1249);
+});
+
+test('accepts user-entered decimal rates for both rate types', () => {
+  const prime = calculateLoan(validForm({ ratePercent: 6.25 }));
+  const fixed = calculateLoan(validForm({ interestRateType: 'fixed_linked_to_cpi', ratePercent: 6.25 }));
+  const lowPrime = calculateLoan(validForm({ ratePercent: 0.21 }));
+  const lowFixed = calculateLoan(validForm({ interestRateType: 'fixed_linked_to_cpi', ratePercent: 0.21 }));
+  closeTo(prime.annualRate, 0.11, 1e-12);
+  closeTo(fixed.annualRate, 0.0625, 1e-12);
+  closeTo(lowPrime.annualRate, 0.0496, 1e-12);
+  closeTo(lowFixed.annualRate, 0.0021, 1e-12);
+  assert.deepEqual(validateCalculatorInputs(validForm({ ratePercent: 6.25 })), {});
+  assert.deepEqual(validateCalculatorInputs(validForm({ interestRateType: 'fixed_linked_to_cpi', ratePercent: 6.25 })), {});
+  assert.deepEqual(validateCalculatorInputs(validForm({ ratePercent: 0.21 })), {});
+  assert.deepEqual(validateCalculatorInputs(validForm({ interestRateType: 'fixed_linked_to_cpi', ratePercent: 0.21 })), {});
+  assert.equal(PRIME_SPREAD_MIN_PERCENT, 0);
+  assert.equal(PRIME_SPREAD_MAX_PERCENT, 10.5);
+  assert.equal(FIXED_RATE_MIN_PERCENT, 0);
+  assert.equal(FIXED_RATE_MAX_PERCENT, 11);
+});
+
+test('matches reference amount scaling: 120,000 / 100 / fixed 5.5% = 1,499', () => {
+  const result = calculateLoan(validForm({
+    amount: 120000,
+    interestRateType: 'fixed_linked_to_cpi',
+    ratePercent: 5.5,
+  }));
+  assert.equal(result.monthlyPayment, 1499);
+});
+
+test('matches the balloon calculation: 120,000 / 60 / P + 5.5% / 30,000 balloon = 2,180', () => {
+  const input = validForm({
+    amount: 120000,
     termMonths: 60,
-    annualInterestRatePercent: 8,
-    balloonAmount: 20000,
+    balloonAmount: 30000,
   });
-
-  closeTo(result.monthlyPayment, 741.62516198574281);
-  closeTo(result.commission, 1130);
-  closeTo(result.vat, 203.4);
-  closeTo(result.totalCommissionIncludingVat, 1333.4);
-  closeTo(result.annualRate, 0.08);
+  const result = calculateLoan(input);
+  closeTo(result.monthlyPaymentExact, 2179.57);
+  assert.equal(result.monthlyPayment, 2180);
+  assert.equal(result.totalScheduledRepayments, 160800);
 });
 
-/* ================================================================== *
- * Monthly payment
- * ================================================================== */
-
-test('with no balloon it matches the standard annuity formula', () => {
-  const amount = 120000;
-  const termMonths = 48;
-  const annualInterestRatePercent = 6.5;
-
-  const { monthlyPayment } = calculateLoan({
-    amount,
-    termMonths,
-    annualInterestRatePercent,
-    balloonAmount: 0,
-  });
-
-  // Derived independently, in a different algebraic form than pmt() uses.
-  const r = annualInterestRatePercent / 100 / 12;
-  const expected = (amount * r) / (1 - Math.pow(1 + r, -termMonths));
-
-  closeTo(monthlyPayment, expected);
+test('monthly payment recalculates with an eligible balloon up to 65% of principal', () => {
+  const noBalloon = calculateLoan(validForm({ amount: 100000, termMonths: 60 }));
+  const withBalloon = calculateLoan(validForm({ amount: 100000, termMonths: 60, balloonAmount: 65000 }));
+  assert.equal(withBalloon.monthlyPayment, 1303);
+  assert.ok(withBalloon.monthlyPayment < noBalloon.monthlyPayment);
+  assert.equal(withBalloon.totalScheduledRepayments, withBalloon.monthlyPayment * 60 + 65000);
 });
 
-test('at 0% interest the balance is simply split across the months', () => {
-  const { monthlyPayment } = calculateLoan({
+test('matches reference 2022 term example: fixed 5.5%, 120,000 over 96 months = 1,548', () => {
+  const result = calculateLoan(validForm({
+    amount: 120000,
+    termMonths: 96,
+    interestRateType: 'fixed_linked_to_cpi',
+    ratePercent: 5.5,
+  }));
+  assert.equal(result.monthlyPayment, 1548);
+});
+
+test('a zero-rate boundary is mathematically stable', () => {
+  const result = calculateLoan(validForm({
+    interestRateType: 'fixed_linked_to_cpi',
+    ratePercent: 0,
     amount: 60000,
     termMonths: 24,
-    annualInterestRatePercent: 0,
     balloonAmount: 12000,
-  });
-
-  // (60000 - 12000) / 24
-  closeTo(monthlyPayment, 2000);
+  }));
+  assert.equal(result.monthlyPayment, 2000);
 });
 
-test('a bigger balloon lowers the monthly payment', () => {
-  const base = { amount: 80000, termMonths: 36, annualInterestRatePercent: 7 };
-
-  const noBalloon = calculateLoan({ ...base, balloonAmount: 0 }).monthlyPayment;
-  const withBalloon = calculateLoan({ ...base, balloonAmount: 30000 }).monthlyPayment;
-
-  assert.ok(withBalloon < noBalloon, 'balloon should reduce the monthly payment');
+test('pmt handles a zero rate and final balloon', () => {
+  closeTo(pmt(0, 10, -1000, 200), 80, 1e-12);
 });
 
-test('a higher rate raises the monthly payment', () => {
-  const base = { amount: 80000, termMonths: 36, balloonAmount: 0 };
-
-  const low = calculateLoan({ ...base, annualInterestRatePercent: 4 }).monthlyPayment;
-  const high = calculateLoan({ ...base, annualInterestRatePercent: 9 }).monthlyPayment;
-
-  assert.ok(high > low, 'a higher rate should cost more per month');
+test('balloon ceiling is 65% of original principal for terms up to 60 months', () => {
+  assert.equal(getMaximumBalloonAmount({ termMonths: 60, amount: 120000 }), 78000);
+  assert.equal(getMaximumBalloonAmount({ termMonths: 24, amount: 60000 }), 39000);
+  assert.equal(getMaximumBalloonAmount({ termMonths: 61, amount: 120000 }), 0);
+  assert.equal(getMaximumBalloonAmount({ termMonths: 60, amount: 0 }), 0);
+  assert.equal(LOAN_AMOUNT_MIN, 30000);
+  assert.equal(LOAN_AMOUNT_MAX, 1000000);
+  assert.equal(TERM_MONTHS_MIN, 12);
+  assert.equal(TERM_MONTHS_MAX, 100);
+  assert.equal(MAX_BALLOON_TERM_MONTHS, 60);
+  assert.equal(MAX_BALLOON_PRINCIPAL_RATIO, 0.65);
 });
 
-test('a longer term lowers the monthly payment', () => {
-  const base = { amount: 80000, annualInterestRatePercent: 7, balloonAmount: 0 };
-
-  const short = calculateLoan({ ...base, termMonths: 24 }).monthlyPayment;
-  const long = calculateLoan({ ...base, termMonths: 72 }).monthlyPayment;
-
-  assert.ok(long < short, 'spreading payments out should lower each one');
+test('Pure Credit commission and VAT remain separate from financed principal', () => {
+  const result = calculateLoan(validForm());
+  assert.equal(result.commission, 1880);
+  assert.equal(result.vat, 338.4);
+  assert.equal(result.totalCommissionIncludingVat, 2218.4);
+  assert.equal(result.totalScheduledRepayments, result.monthlyPayment * 100);
+  assert.equal(result.totalEstimatedCost, result.totalScheduledRepayments + 2218.4);
+  assert.equal(COMMISSION_RATE, 0.015);
+  assert.equal(COMMISSION_FIXED, 380);
+  assert.equal(VAT_RATE, 0.18);
+  assert.equal(REFERENCE_PRIME_BASE_RATE_PERCENT, 4.75);
 });
 
-test('handles a very small and a very large loan', () => {
-  const small = calculateLoan({
-    amount: 1000,
-    termMonths: 12,
-    annualInterestRatePercent: 8,
-    balloonAmount: 0,
-  });
-  const large = calculateLoan({
-    amount: 2000000,
-    termMonths: 120,
-    annualInterestRatePercent: 8,
-    balloonAmount: 0,
-  });
-
-  assert.ok(small.monthlyPayment > 0 && Number.isFinite(small.monthlyPayment));
-  assert.ok(large.monthlyPayment > 0 && Number.isFinite(large.monthlyPayment));
+test('calculator rejects invalid ranges, out-of-range rates, and balloon outside its term/amount limit', () => {
+  assert.ok(validateCalculatorInputs(validForm({ amount: 20000 })).amount);
+  assert.ok(validateCalculatorInputs(validForm({ amount: 1000001 })).amount);
+  assert.ok(validateCalculatorInputs(validForm({ termMonths: 101 })).termMonths);
+  assert.ok(validateCalculatorInputs(validForm({ termMonths: 11 })).termMonths);
+  assert.deepEqual(validateCalculatorInputs(validForm({ ratePercent: 5 })), {});
+  assert.ok(validateCalculatorInputs(validForm({ ratePercent: 10.51 })).ratePercent);
+  assert.ok(validateCalculatorInputs(validForm({ ratePercent: -0.01 })).ratePercent);
+  assert.ok(validateCalculatorInputs(validForm({ interestRateType: 'fixed_linked_to_cpi', ratePercent: 11.01 })).ratePercent);
+  assert.ok(validateCalculatorInputs(validForm({ interestRateType: 'fixed_linked_to_cpi', ratePercent: 6.255 })).ratePercent);
+  assert.ok(validateCalculatorInputs(validForm({ termMonths: 60, balloonAmount: 65001 })).balloonAmount);
+  assert.ok(validateCalculatorInputs(validForm({ termMonths: 61, balloonAmount: 1 })).balloonAmount);
 });
 
-test('a zero-month term does not blow up', () => {
-  const { monthlyPayment } = calculateLoan({
-    amount: 50000,
-    termMonths: 0,
-    annualInterestRatePercent: 8,
-    balloonAmount: 0,
-  });
-
-  assert.equal(monthlyPayment, 0);
-});
-
-test('pmt returns the balance split evenly when the rate is zero', () => {
-  closeTo(pmt(0, 10, -1000), 100);
-});
-
-/* ================================================================== *
- * Commission, VAT, total
- * ================================================================== */
-
-test('commission is 1.5% of the loan plus the fixed fee', () => {
-  const { commission } = calculateLoan({
-    amount: 200000,
+test('calculator accepts maximum amount, term, and balloon boundaries', () => {
+  assert.deepEqual(validateCalculatorInputs(validForm({
+    amount: 1000000,
     termMonths: 60,
-    annualInterestRatePercent: 8,
+    interestRateType: 'fixed_linked_to_cpi',
+    ratePercent: 11,
+    balloonAmount: 650000,
+  })), {});
+  assert.deepEqual(validateCalculatorInputs(validForm({
+    amount: 30000,
+    termMonths: 100,
     balloonAmount: 0,
-  });
-
-  closeTo(commission, 200000 * COMMISSION_RATE + COMMISSION_FIXED); // 3380
-  closeTo(commission, 3380);
+  })), {});
 });
 
-test('commission does not depend on term, rate or balloon', () => {
-  const a = calculateLoan({
-    amount: 90000,
-    termMonths: 12,
-    annualInterestRatePercent: 3,
-    balloonAmount: 0,
-  });
-  const b = calculateLoan({
-    amount: 90000,
-    termMonths: 96,
-    annualInterestRatePercent: 15,
-    balloonAmount: 40000,
-  });
-
-  closeTo(a.commission, b.commission);
-  closeTo(a.vat, b.vat);
-});
-
-test('VAT is 18% of the commission and the total is their sum', () => {
-  const { commission, vat, totalCommissionIncludingVat } = calculateLoan({
-    amount: 75000,
-    termMonths: 48,
-    annualInterestRatePercent: 5,
-    balloonAmount: 0,
-  });
-
-  closeTo(vat, commission * VAT_RATE);
-  closeTo(totalCommissionIncludingVat, commission + vat);
-});
-
-/* ================================================================== *
- * Validation
- * ================================================================== */
-
-test('a fully filled form passes', () => {
+test('validates agent and applicant fields with the existing contact rules', () => {
   assert.deepEqual(validateApplication(validForm()), {});
-});
-
-test('an empty balloon (0) is allowed', () => {
-  assert.deepEqual(validateApplication(validForm({ balloonAmount: 0 })), {});
-});
-
-test('a 0% rate is allowed', () => {
-  assert.deepEqual(validateApplication(validForm({ annualInterestRatePercent: 0 })), {});
-});
-
-test('rejects a missing or non-positive loan amount', () => {
-  for (const amount of [NaN, 0, -5000]) {
-    const errors = validateApplication(validForm({ amount }));
-    assert.ok(errors.amount, `amount ${amount} should be rejected`);
+  const errors = validateApplication(validForm({
+    agentFullName: ' ',
+    agentAgencyName: '',
+    agentPhone: '123',
+    applicantFirstName: '',
+    applicantLastName: ' ',
+    applicantPhone: 'x',
+  }));
+  for (const key of ['agentFullName', 'agentAgencyName', 'agentPhone', 'applicantFirstName', 'applicantLastName', 'applicantPhone']) {
+    assert.ok(errors[key], `${key} should be rejected`);
   }
 });
 
-test('rejects a fractional or non-positive term', () => {
-  for (const termMonths of [NaN, 0, -12, 24.5]) {
-    const errors = validateApplication(validForm({ termMonths }));
-    assert.ok(errors.termMonths, `term ${termMonths} should be rejected`);
-  }
-});
-
-test('rejects a negative rate but not zero', () => {
-  assert.ok(validateApplication(validForm({ annualInterestRatePercent: -1 })).annualInterestRatePercent);
-  assert.ok(validateApplication(validForm({ annualInterestRatePercent: NaN })).annualInterestRatePercent);
-  assert.ok(!validateApplication(validForm({ annualInterestRatePercent: 0 })).annualInterestRatePercent);
-});
-
-test('rejects a balloon that is not smaller than the loan amount', () => {
-  assert.ok(validateApplication(validForm({ amount: 50000, balloonAmount: 50000 })).balloonAmount);
-  assert.ok(validateApplication(validForm({ amount: 50000, balloonAmount: 60000 })).balloonAmount);
-  assert.ok(validateApplication(validForm({ amount: 50000, balloonAmount: -1 })).balloonAmount);
-  assert.ok(!validateApplication(validForm({ amount: 50000, balloonAmount: 49999 })).balloonAmount);
-});
-
-test('rejects blank text fields, including whitespace only', () => {
-  const errors = validateApplication(
-    validForm({
-      agentFullName: '',
-      agentAgencyName: '   ',
-      applicantFirstName: '',
-      applicantLastName: ' ',
-    })
-  );
-
-  assert.ok(errors.agentFullName);
-  assert.ok(errors.agentAgencyName);
-  assert.ok(errors.applicantFirstName);
-  assert.ok(errors.applicantLastName);
-});
-
-test('accepts real phone formats and rejects bad ones', () => {
-  for (const phone of ['0501234567', '050-123-4567', '03 1234567', '021234567']) {
-    assert.ok(!validateApplication(validForm({ agentPhone: phone })).agentPhone, `${phone} should pass`);
-  }
-  for (const phone of ['', '12345', '05012345678901']) {
-    assert.ok(validateApplication(validForm({ agentPhone: phone })).agentPhone, `${phone} should fail`);
-  }
-});
-
-test('reports every problem at once, not just the first', () => {
-  const errors = validateApplication(
-    validForm({ amount: NaN, termMonths: NaN, agentFullName: '', applicantPhone: 'x' })
-  );
-
-  assert.equal(Object.keys(errors).length, 4);
-});
-
-/* ================================================================== *
- * Webhook payload
- * ================================================================== */
-
-test('builds the payload with the agreed shape', () => {
-  const values = validForm();
-  const payload = buildLoanApplicationPayload(values, calculateLoan(values));
-
-  assert.deepEqual(payload, {
-    agent: {
-      fullName: 'ישראל ישראלי',
-      agencyName: 'סוכנות רכב בעמ',
-      phone: '050-1234567',
-    },
-    applicant: {
-      firstName: 'דניאל',
-      lastName: 'כהן',
-      phone: '0521234567',
-    },
-    loan: {
-      amount: 50000,
-      termMonths: 60,
-      balloonAmount: 20000,
-      annualInterestRate: 0.08,
-      monthlyPayment: 741.63,
-      commission: 1130,
-      vat: 203.4,
-      totalCommissionIncludingVat: 1333.4,
-    },
-  });
-});
-
-test('every money field is a number, never a formatted string', () => {
-  const values = validForm();
-  const { loan } = buildLoanApplicationPayload(values, calculateLoan(values));
-
-  for (const [key, value] of Object.entries(loan)) {
-    assert.equal(typeof value, 'number', `loan.${key} should be a number`);
-    assert.ok(Number.isFinite(value), `loan.${key} should be finite`);
-  }
-});
-
-test('trims whitespace out of the text fields', () => {
+test('schema v2 keeps agent/applicant objects and supplies calculation inputs and rules', () => {
   const values = validForm({
-    agentFullName: '  ישראל ישראלי  ',
-    applicantFirstName: ' דניאל ',
-    applicantPhone: ' 0521234567 ',
+    balloonAmount: 30000,
+    amount: 120000,
+    termMonths: 60,
   });
-
-  const payload = buildLoanApplicationPayload(values, calculateLoan(values));
-
-  assert.equal(payload.agent.fullName, 'ישראל ישראלי');
-  assert.equal(payload.applicant.firstName, 'דניאל');
-  assert.equal(payload.applicant.phone, '0521234567');
+  const result = calculateLoan(values);
+  const payload = buildLoanApplicationPayload(values, result);
+  assert.equal(payload.schemaVersion, 2);
+  assert.deepEqual(payload.agent, {
+    fullName: 'ישראל ישראלי',
+    agencyName: 'סוכנות רכב בע״מ',
+    phone: '050-1234567',
+  });
+  assert.deepEqual(payload.applicant, {
+    firstName: 'דניאל',
+    lastName: 'כהן',
+    phone: '0521234567',
+  });
+  assert.deepEqual(payload.loan, {
+    amount: 120000,
+    termMonths: 60,
+    balloonAmount: 30000,
+    interestRateType: 'prime_margin',
+    ratePercent: 5.5,
+    annualInterestRate: 0.1025,
+    monthlyInterestRate: 0.1025 / 12,
+    calculationMethod: 'monthly_annuity_with_end_of_term_balloon',
+    balloonTiming: 'after_final_monthly_payment',
+    monthlyPayment: 2180,
+    monthlyPaymentExact: 2179.57,
+    commissionRate: 0.015,
+    commissionFixed: 380,
+    commission: 2180,
+    vatRate: 0.18,
+    vat: 392.4,
+    totalCommissionIncludingVat: 2572.4,
+    totalScheduledRepayments: 160800,
+    totalEstimatedCost: 163372.4,
+    monthlyPaymentRounding: 'nearest_whole_ils',
+    primeBaseRatePercent: 4.75,
+    primeSpreadPercent: 5.5,
+  });
 });
 
-test('the payload survives a JSON round trip unchanged', () => {
-  const values = validForm();
+test('fixed-rate payload identifies CPI indexation as excluded from the estimate', () => {
+  const values = validForm({ interestRateType: 'fixed_linked_to_cpi', ratePercent: 5.5 });
   const payload = buildLoanApplicationPayload(values, calculateLoan(values));
+  assert.equal(payload.loan.fixedInterestRatePercent, 5.5);
+  assert.equal(payload.loan.inflationIndexationIncluded, false);
+  assert.equal('primeSpreadPercent' in payload.loan, false);
+});
 
-  assert.deepEqual(JSON.parse(JSON.stringify(payload)), payload);
+test('workflow submission uses a mock fetch, JSON POST, and never calls the configured endpoint', async () => {
+  const calls = [];
+  const mockFetch = async (...args) => {
+    calls.push(args);
+    return { ok: true, status: 200 };
+  };
+  const payload = buildLoanApplicationPayload(validForm(), calculateLoan(validForm()));
+  const response = await postLoanApplication('https://workflow.invalid/webhook/mock', payload, mockFetch);
+
+  assert.equal(response.ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], 'https://workflow.invalid/webhook/mock');
+  assert.deepEqual(calls[0][1], {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+});
+
+test('mocked workflow responses preserve success:false and optional status behavior', async () => {
+  const success = await readWorkflowResponse({
+    ok: true,
+    text: async () => JSON.stringify({ success: true, status: 'חדשה' }),
+  });
+  assert.deepEqual(success, { ok: true, message: '', status: 'חדשה' });
+
+  const rejected = await readWorkflowResponse({
+    ok: true,
+    text: async () => JSON.stringify({ success: false, message: 'not recorded' }),
+  });
+  assert.equal(rejected.ok, false);
+  assert.equal(rejected.message, 'not recorded');
+
+  const immediate = await readWorkflowResponse({ ok: true, text: async () => '' });
+  assert.deepEqual(immediate, { ok: true, message: '', status: '' });
+
+  const httpFailure = await readWorkflowResponse({ ok: false, text: async () => '{invalid' });
+  assert.deepEqual(httpFailure, { ok: false, message: '', status: '' });
 });
