@@ -532,6 +532,9 @@ h3 {
   flex-direction: column;
   gap: 7px;
 }
+.field[hidden] {
+  display: none;
+}
 .field label {
   font-size: 14px;
   font-weight: 600;
@@ -545,7 +548,8 @@ h3 {
 
 .field input[type="text"],
 .field input[type="tel"],
-.field input[type="number"] {
+.field input[type="number"],
+.field select {
   font-family: var(--font-body);
   font-size: 16px; /* 16px avoids iOS zoom-on-focus */
   width: 100%;
@@ -585,6 +589,28 @@ h3 {
   padding-right: 14px;
   padding-left: 70px;
 }
+.field select {
+  min-height: 48px;
+  direction: rtl;
+}
+#ratePercent {
+  direction: ltr;
+}
+.field-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.calc-estimate-note {
+  margin: 0;
+  padding: 14px 16px;
+  border-inline-start: 3px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: rgba(220, 189, 112, 0.12);
+  color: var(--text-muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
 .input-with-slider .unit {
   position: absolute;
   left: 14px;
@@ -607,7 +633,8 @@ h3 {
   min-height: 1px;
   display: none;
 }
-.field.invalid input {
+.field.invalid input,
+.field.invalid select {
   border-color: var(--error);
 }
 .field.invalid .err {
